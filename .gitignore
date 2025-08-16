@@ -1,0 +1,10 @@
+# local env & logs
+.env
+/var/tmp/vios-autoconfig/
+/*.log
+**/*.log
+
+# editor/OS cruft
+.DS_Store
+*.swp
+
