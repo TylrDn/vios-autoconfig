@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck bats
+      - name: Shellcheck
+        run: shellcheck $(git ls-files '*.sh')
+      - name: Run tests
+        run: bats tests
+      - name: Check env example
+        run: |
+          ! grep -E 'PASSWORD|PASS|TOKEN' .env.example
+      - name: Help output
+        run: |
+          ./vios-auto.sh --help >/dev/null
+          ./vios-auto.sh create-vscsi --help >/dev/null
