@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "**" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "**" ]
+    branches: [ "main" ]
 
 permissions:
   contents: read
@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     name: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -23,9 +23,11 @@ jobs:
           set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y shellcheck shfmt bats jq gawk git
-          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/v8.18.4/scripts/install.sh | \
+          # TODO: replace the commit hash below with the trusted commit for the gitleaks install script
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/0000000000000000000000000000000000000000/scripts/install.sh | \
             bash -s -- -b /usr/local/bin
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          # TODO: replace the commit hash and version below with the desired syft release
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/0000000000000000000000000000000000000000/install.sh | sh -s -- -b /usr/local/bin v0.0.0
           syft version
           gitleaks version
 
