@@ -157,7 +157,7 @@ run_hmc() {
   local hmc_cmd=("$@")
   for arg in "${hmc_cmd[@]}"; do
     [[ "${arg}" != *$'\n'* && "${arg}" != *$'\r'* ]] || die "Refusing unsafe command"
-    [[ "${arg}" != *\`* && "${arg}" != *'|'* && "${arg}" != *'&'* && "${arg}" != *'>'* && "${arg}" != *'<'* && "${arg}" != *'$'* && "${arg}" != *';'* ]] || die "Refusing unsafe command"
+    [[ "${arg}" != *\`* && "${arg}" != *'|'* && "${arg}" != *'&'* && "${arg}" != *'>'* && "${arg}" != *'<'* && "${arg}" != *'$('* && "${arg}" != *';'* ]] || die "Refusing unsafe command"
   done
   local ssh_cmd=(ssh -i "${HMC_SSH_KEY}" "${DEFAULT_SSH_OPTS[@]}" "${HMC_USER}@${HMC_HOST}" -- "${hmc_cmd[@]}")
   if [[ "${DRY_RUN}" == "1" || "${APPLY}" != "1" ]]; then
