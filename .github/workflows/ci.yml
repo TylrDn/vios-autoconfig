@@ -2,36 +2,64 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ "**" ]
   pull_request:
+    branches: [ "**" ]
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: build
+    runs-on: ubuntu-24.04
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Install tools
         run: |
-          set -e
+          set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y shellcheck shfmt bats git
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_$(uname -s)_$(uname -m).tar.gz \
-            | tar -xz gitleaks
-          sudo mv gitleaks /usr/local/bin/gitleaks
-      - name: Format check
-        run: git ls-files '*.sh' | xargs shfmt -d
-      - name: Lint
-        run: git ls-files '*.sh' | xargs shellcheck
-      - name: Secret scan
-        run: gitleaks detect --no-git -v
-      - name: Test
+          sudo apt-get install -y shellcheck shfmt bats jq gawk git
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/v8.18.4/scripts/install.sh | \
+            bash -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          syft version
+          gitleaks version
+
+      - name: Format check (shfmt)
         run: |
-          set -e
-          PATH="$(pwd)/tests/mocks/bin:$PATH" APPLY=0 bats -r tests
-      - name: SBOM
-        run: git ls-files > sbom.txt
+          set -euxo pipefail
+          shfmt -d .
+
+      - name: Lint (shellcheck)
+        run: |
+          set -euxo pipefail
+          find . -type f -name "*.sh" -print0 | xargs -0 -I{} shellcheck --severity=style --external-sources -f gcc {}
+
+      - name: Secret scan (gitleaks)
+        run: |
+          set -euxo pipefail
+          gitleaks detect --no-git -v --redact
+
+      - name: Run tests (bats)
+        run: |
+          set -euxo pipefail
+          if compgen -G "tests/*.bats" > /dev/null; then
+            bats tests
+          else
+            echo "No Bats tests found; skipping."
+          fi
+
+      - name: Build SBOM (syft)
+        run: |
+          set -euxo pipefail
+          syft dir:. -o spdx-json=sbom.spdx.json
+
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
           name: sbom
-          path: sbom.txt
+          path: sbom.spdx.json

@@ -1,37 +1,46 @@
 name: Release
-
 on:
   push:
-    tags: ['v*.*.*']
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Verify tag
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag matches VERSION
         run: |
+          set -euo pipefail
           if [ -f VERSION ]; then
-            v=$(cat VERSION | awk '{$1=$1};1')
-            if [ "v$v" != "${GITHUB_REF_NAME}" ]; then
-              echo "Tag does not match VERSION file" >&2
+            v="$(awk '{\$1=\$1};1' VERSION)"
+            if [ "v${v}" != "${GITHUB_REF_NAME}" ]; then
+              echo "Tag ${GITHUB_REF_NAME} does not match VERSION v${v}" >&2
               exit 1
             fi
           fi
-      - name: Package
-        env:
-          VERSION: ${GITHUB_REF_NAME#v}
+
+      - name: Build dist
         run: |
-          set -e
-          mkdir -p dist
-          tar --sort=name --owner=0 --group=0 --numeric-owner -czf dist/vios-autoconfig-${VERSION}.tar.gz scripts lib maps README.md LICENSE .env.example
-          sha256sum dist/vios-autoconfig-${VERSION}.tar.gz > dist/vios-autoconfig-${VERSION}.tar.gz.sha256
-      - name: Upload artifacts
+          set -euxo pipefail
+          rm -rf dist && mkdir -p dist
+          tar -czf "dist/vios-autoconfig-${GITHUB_REF_NAME}.tar.gz" lib maps scripts README.md LICENSE
+
+      - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/*
+
       - name: Release
         uses: softprops/action-gh-release@d8199f1870e7d2834e97e1f38da813e1ea977473
         with:
           files: dist/*
+          generate_release_notes: true
