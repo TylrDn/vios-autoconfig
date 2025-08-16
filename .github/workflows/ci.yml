@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y shellcheck shfmt bats git
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_$(uname -s)_$(uname -m).tar.gz \
+            | tar -xz gitleaks
+          sudo mv gitleaks /usr/local/bin/gitleaks
+      - name: Format check
+        run: git ls-files '*.sh' | xargs shfmt -d
+      - name: Lint
+        run: git ls-files '*.sh' | xargs shellcheck
+      - name: Secret scan
+        run: gitleaks detect --no-git -v
+      - name: Test
+        run: |
+          set -e
+          PATH="$(pwd)/tests/mocks/bin:$PATH" APPLY=0 bats -r tests
+      - name: SBOM
+        run: git ls-files > sbom.txt
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.txt
