@@ -20,15 +20,15 @@ load_env() {
   fi
   for var in "${vars[@]}"; do
     if [ -z "${!var:-}" ]; then
-      local var_uc
+      local var_uc val
       var_uc=$(printf '%s' "$var" | tr '[:lower:]' '[:upper:]')
       case $var_uc in
         *PASSWORD*|*TOKEN*|*SECRET*)
-          read -r -s -p "$var: " "$var"; echo ;;
+          read -r -s -p "$var: " val; echo ;;
         *)
-          read -r -p "$var: " "$var" ;;
+          read -r -p "$var: " val ;;
       esac
-      export "$var"
+      export "$var=$val"
     fi
   done
   require_env "${vars[@]}"
