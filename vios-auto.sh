@@ -44,16 +44,18 @@ if [ "${1:-}" = "--help" ]; then
   exit 0
 fi
 
-load_env
-
 case "$cmd" in
   create-vscsi)
+    load_env MS VIOS1
     "$SCRIPT_DIR/scripts/create-vscsi.sh" "$@" ;;
   create-npiv)
+    load_env
     "$SCRIPT_DIR/scripts/create-npiv.sh" "$@" ;;
   create-sea)
+    load_env
     "$SCRIPT_DIR/scripts/create-sea.sh" "$@" ;;
   run-extension)
+    load_env
     [ "$#" -gt 0 ] || { log ERROR "Missing extension name"; exit 1; }
     "$SCRIPT_DIR/extensions/$1.sh" "${@:2}" ;;
   *)

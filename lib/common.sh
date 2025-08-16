@@ -5,27 +5,34 @@ REPO_ROOT="$(cd "${BASH_SOURCE%/*}/.." && pwd)"
 
 # ---- environment handling ---------------------------------------------------
 load_env() {
+  local vars=(HMC_HOST HMC_USER)
+  vars+=("$@")
   if [ -f "$REPO_ROOT/.env" ]; then
-    local perm
-    perm=$(stat -c '%a' "$REPO_ROOT/.env")
-    if [ "$perm" != "600" ]; then
+    local perm=""
+    if ! perm=$(stat -c '%a' "$REPO_ROOT/.env" 2>/dev/null); then
+      perm=$(stat -f '%Lp' "$REPO_ROOT/.env" 2>/dev/null || true)
+    fi
+    if [ -n "$perm" ] && [ "$perm" != "600" ]; then
       echo "ERROR: .env must have 600 permissions" >&2
       exit 1
     fi
     set -a
     . "$REPO_ROOT/.env"
     set +a
-  else
-    read -r -p "HMC_HOST: " HMC_HOST
-    read -r -p "HMC_USER: " HMC_USER
-    export HMC_HOST HMC_USER
   fi
+  for var in "${vars[@]}"; do
+    if [ -z "${!var:-}" ]; then
+      read -r -p "$var: " "$var"
+      export "$var"
+    fi
+  done
+  require_env "${vars[@]}"
 }
 
 mask() {
   local s="$*"
   local v val
-  for v in $(compgen -v | grep -E 'PASS|TOKEN|SECRET'); do
+  for v in $(compgen -v | grep -iE 'pass|password|token|secret'); do
     val=${!v}
     [ -n "$val" ] && s=${s//${val}/****}
   done
@@ -82,7 +89,6 @@ require_env() {
   done
   [ "$missing" -eq 0 ] || exit 1
 }
-
 ensure_binary() {
   for b in "$@"; do
     if ! command -v "$b" >/dev/null 2>&1; then
@@ -154,12 +160,19 @@ vios_cmd() {
 
 enforce_marker() {
   local name="$1"
-  local marker="/var/tmp/vios-autoconfig-${name}.marker"
+  local marker_dir="${TMPDIR:-/var/tmp}"
+  local name_hash
+  if command -v md5sum >/dev/null 2>&1; then
+    name_hash=$(printf '%s' "$name" | md5sum | awk '{print $1}')
+  else
+    name_hash=$(printf '%s' "$name" | md5 | awk '{print $4}')
+  fi
+  local marker="${marker_dir}/vios-autoconfig-${name_hash}.marker"
   if [ -e "$marker" ] && [ "$FORCE" -eq 0 ]; then
-    log INFO "Marker exists for $name"
+    log INFO "Marker exists for $name (hash: $name_hash)"
     return 1
   fi
-  mkdir -p "$(dirname "$marker")"
+  mkdir -p "$marker_dir"
   : > "$marker"
   return 0
 }

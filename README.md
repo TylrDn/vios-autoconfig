@@ -11,7 +11,7 @@ repeatable operations with clear dry‑run support.
 |------|-------------|
 | `lib/` | Shared shell utilities (environment loading, logging, SSH helpers) |
 | `scripts/` | Operational logic for vSCSI, NPIV, SEA and more |
-| `maps/` | User supplied mapping files consumed by scripts |
+| `maps/` | User-supplied mapping files consumed by scripts |
 | `tests/` | Automated tests using [bats-core](https://bats-core.readthedocs.io) |
 | `extensions/` | Optional plugin hooks auto-discovered by `vios-auto.sh` |
 
@@ -48,7 +48,7 @@ usage details.
 
 - All scripts execute with `set -euo pipefail`.
 - Commands default to dry‑run mode; nothing changes until explicitly confirmed.
-- Idempotency markers in `/var/tmp/vios-autoconfig-*` prevent repeated work
+- Idempotency markers in `${TMPDIR:-/var/tmp}/vios-autoconfig-*` prevent repeated work
   unless `--force` is supplied.
 - Logging uses INFO/WARN/ERROR levels and masks credentials.
 
