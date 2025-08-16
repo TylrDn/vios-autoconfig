@@ -13,10 +13,14 @@ Env: DRY_RUN=1 or APPLY=1; ./.env supplies HMC_* variables
 EOF
 }
 
-VIOS=""; LPAR=""; VHOST=""; DISK=""
 DRY_RUN="${DRY_RUN:-0}"; APPLY="${APPLY:-0}"
 
 parse_flags "$@"
+
+VIOS="${FLAG_VIOS:-}"
+LPAR="${FLAG_LPAR:-}"
+VHOST="${FLAG_VHOST:-}"
+DISK="${FLAG_DISK:-}"
 
 [[ -n "${VIOS}" && -n "${LPAR}" && -n "${VHOST}" && -n "${DISK}" ]] || { usage; exit 2; }
 

@@ -44,7 +44,13 @@ load_env() {
   if [[ -f "${env_file}" ]]; then
     require_cmd stat
     local mode
-    mode="$(stat -c '%a' "${env_file}")"
+    if mode="$(stat -c '%a' "${env_file}" 2>/dev/null)"; then
+      :
+    elif mode="$(stat -f '%Lp' "${env_file}" 2>/dev/null)"; then
+      :
+    else
+      die "Unable to determine permissions for ${env_file}"
+    fi
     [[ "${mode}" == "600" ]] || die "${env_file} must have permissions 600"
     # shellcheck disable=SC1090
     set -a; . "${env_file}"; set +a
@@ -97,8 +103,9 @@ run() {
   "$@"
 }
 
-# ---- Common flag parser (maps --foo bar to FOO=bar)
+# ---- Common flag parser (maps --foo bar to FLAG_FOO=bar, resets namespace)
 parse_flags() {
+  for var in ${!FLAG_@}; do unset "${var}"; done
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dry-run) DRY_RUN=1; shift ;;
@@ -107,11 +114,11 @@ parse_flags() {
       --*=*)
         local opt="${1%%=*}"
         local val="${1#*=}"
-        opt="${opt#--}"; local var="${opt^^}"; var="${var//-/_}"
+        opt="${opt#--}"; local var="FLAG_${opt^^}"; var="${var//-/_}"
         printf -v "${var}" '%s' "${val}"
         shift ;;
       --*)
-        local opt="${1#--}"; local var="${opt^^}"; var="${var//-/_}"
+        local opt="${1#--}"; local var="FLAG_${opt^^}"; var="${var//-/_}"
         [[ $# -ge 2 ]] || die "Missing value for --${opt}"
         printf -v "${var}" '%s' "$2"
         shift 2 ;;
@@ -128,8 +135,9 @@ run_hmc_vios() {
   local ios_cmd="$*"
 
   [[ "${vios}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "Invalid VIOS name: ${vios}"
-  # Conservative injection guard (reject control chars, newlines, semicolons)
-  [[ "${ios_cmd}" != *$'\n'* && "${ios_cmd}" != *";"* && "${ios_cmd}" != *$'\r'* ]] || die "Refusing unsafe command"
+  # Conservative injection guard (reject control chars and common metacharacters)
+  [[ "${ios_cmd}" != *$'\n'* && "${ios_cmd}" != *$'\r'* ]] || die "Refusing unsafe command"
+  [[ "${ios_cmd}" != *";"* && "${ios_cmd}" != *"|"* && "${ios_cmd}" != *"&"* && "${ios_cmd}" != *"<"* && "${ios_cmd}" != *">"* && "${ios_cmd}" != *"`"* && "${ios_cmd}" != *'$('* ]] || die "Refusing unsafe command"
 
   local ssh_cmd=(ssh -i "${HMC_SSH_KEY}" "${DEFAULT_SSH_OPTS[@]}" "${HMC_USER}@${HMC_HOST}")
   local full=( "${ssh_cmd[@]}" -- viosvrcmd -m "${vios}" -c "${ios_cmd}" )
@@ -146,14 +154,17 @@ run_hmc_vios() {
 # ---- Run raw HMC command via SSH
 run_hmc() {
   require_cmd ssh
-  local hmc_cmd="$*"
-  [[ "${hmc_cmd}" != *$'\n'* && "${hmc_cmd}" != *";"* && "${hmc_cmd}" != *$'\r'* ]] || die "Refusing unsafe command"
-  local ssh_cmd=(ssh -i "${HMC_SSH_KEY}" "${DEFAULT_SSH_OPTS[@]}" "${HMC_USER}@${HMC_HOST}" -- "${hmc_cmd}")
+  local hmc_cmd=("$@")
+  for arg in "${hmc_cmd[@]}"; do
+    [[ "${arg}" != *$'\n'* && "${arg}" != *$'\r'* ]] || die "Refusing unsafe command"
+    [[ "${arg}" != *\`* && "${arg}" != *'|'* && "${arg}" != *'&'* && "${arg}" != *'>'* && "${arg}" != *'<'* && "${arg}" != *'$'* && "${arg}" != *';'* ]] || die "Refusing unsafe command"
+  done
+  local ssh_cmd=(ssh -i "${HMC_SSH_KEY}" "${DEFAULT_SSH_OPTS[@]}" "${HMC_USER}@${HMC_HOST}" -- "${hmc_cmd[@]}")
   if [[ "${DRY_RUN}" == "1" || "${APPLY}" != "1" ]]; then
     log INFO "[dry-run] ${ssh_cmd[*]}"
     return 0
   fi
-  log INFO "HMC: ${hmc_cmd}"
+  log INFO "HMC: ${hmc_cmd[*]}"
   "${ssh_cmd[@]}" 2> >(tee -a "${LOG_DIR}/hmc.err" >&2) | tee -a "${LOG_DIR}/hmc.out"
 }
 

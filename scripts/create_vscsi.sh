@@ -13,10 +13,15 @@ Env: DRY_RUN=1 or APPLY=1; ./.env supplies HMC_* variables
 EOF
 }
 
-MS=""; VIOS=""; LPAR=""; SERVER_SLOT=""; CLIENT_SLOT=""
 DRY_RUN="${DRY_RUN:-0}"; APPLY="${APPLY:-0}"
 
 parse_flags "$@"
+
+MS="${FLAG_MS:-}"
+VIOS="${FLAG_VIOS:-}"
+LPAR="${FLAG_LPAR:-}"
+SERVER_SLOT="${FLAG_SERVER_SLOT:-}"
+CLIENT_SLOT="${FLAG_CLIENT_SLOT:-}"
 
 [[ -n "${MS}" && -n "${VIOS}" && -n "${LPAR}" && -n "${SERVER_SLOT}" && -n "${CLIENT_SLOT}" ]] || { usage; exit 2; }
 
