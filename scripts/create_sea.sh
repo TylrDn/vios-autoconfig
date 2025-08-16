@@ -16,19 +16,7 @@ EOF
 VIOS=""; BACKING=""; TRUNK=""; VSWITCH=""; VLAN=""
 DRY_RUN="${DRY_RUN:-0}"; APPLY="${APPLY:-0}"
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --vios) VIOS="$2"; shift 2 ;;
-    --backing) BACKING="$2"; shift 2 ;;
-    --trunk) TRUNK="$2"; shift 2 ;;
-    --vswitch) VSWITCH="$2"; shift 2 ;;
-    --vlan) VLAN="$2"; shift 2 ;;
-    --dry-run) DRY_RUN=1; shift ;;
-    --apply) APPLY=1; shift ;;
-    -h|--help) usage; exit 0 ;;
-    *) die "Unknown arg: $1" ;;
-  esac
-done
+parse_flags "$@"
 
 [[ -n "${VIOS}" && -n "${BACKING}" && -n "${TRUNK}" && -n "${VSWITCH}" && -n "${VLAN}" ]] || { usage; exit 2; }
 
@@ -40,7 +28,7 @@ done
 common_init
 confirm_apply
 
-with_lock "sea-${VIOS}" bash -c '
+with_lock "sea-${VIOS}-${VSWITCH}-${VLAN}" bash -c '
   run_hmc_vios "'"${VIOS}"'" "ioscli mkvdev -sea '"${BACKING}"' -vadapter '"${TRUNK}"' -default -defaultid '"${VLAN}"' -attr ha_mode=auto virt_adapters='"${TRUNK}"' vswitch='"${VSWITCH}"'"
   run_hmc_vios "'"${VIOS}"'" "ioscli entstat -d sea0"
 '

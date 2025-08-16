@@ -27,7 +27,9 @@ mkdir -p "${LOCK_DIR}" "${LOG_DIR}"
 
 # ---- Logging (redact sensitive values)
 _redact() {
-  sed -E 's/\b((passw(or)?d|token|secret|key)=)[^[:space:]]+/\1REDACTED/gi'
+  sed -E \
+    -e 's/\b((passw(or)?d|token|secret|key)=)[^[:space:]]+/\1REDACTED/gi' \
+    -e 's/\b(passw(or)?d|token|secret|key)[[:space:]]+[^[:space:]]+/\1 REDACTED/gi'
 }
 _ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
 log() { printf '%s [%s] %s\n' "$(_ts)" "${1:-INFO}" "${*:2}" | _redact | tee -a "${LOG_DIR}/run.log" >&2; }
@@ -40,6 +42,10 @@ require_cmd() { command -v "$1" >/dev/null 2>&1 || die "Missing required command
 load_env() {
   local env_file="${1:-.env}"
   if [[ -f "${env_file}" ]]; then
+    require_cmd stat
+    local mode
+    mode="$(stat -c '%a' "${env_file}")"
+    [[ "${mode}" == "600" ]] || die "${env_file} must have permissions 600"
     # shellcheck disable=SC1090
     set -a; . "${env_file}"; set +a
   fi
@@ -47,7 +53,9 @@ load_env() {
   : "${HMC_USER:?HMC_USER is required}"
   : "${HMC_SSH_KEY:?HMC_SSH_KEY is required}"
   [[ -f "${HMC_SSH_KEY}" ]] || die "HMC_SSH_KEY not found: ${HMC_SSH_KEY}"
-  chmod 600 "${HMC_SSH_KEY}" 2>/dev/null || true
+  if ! chmod 600 "${HMC_SSH_KEY}" 2>/dev/null; then
+    log WARN "Failed to set permissions on HMC_SSH_KEY: ${HMC_SSH_KEY}"
+  fi
   export HMC_HOST HMC_USER HMC_SSH_KEY
 }
 
@@ -69,11 +77,12 @@ pin_hostkey() {
 with_lock() {
   local name="$1"; shift
   local lock="${LOCK_DIR}/${name}.lock"
-  exec 9>"${lock}"
-  if ! flock -n 9; then
+  exec {fd}>"${lock}"
+  if ! flock -n "${fd}"; then
     die "Another process holds lock: ${name}"
   fi
   "$@"
+  exec {fd}>&-
 }
 
 # ---- Safe command runner (dry-run aware)
@@ -86,6 +95,29 @@ run() {
   fi
   log INFO "RUN: $*"
   "$@"
+}
+
+# ---- Common flag parser (maps --foo bar to FOO=bar)
+parse_flags() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run) DRY_RUN=1; shift ;;
+      --apply) APPLY=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      --*=*)
+        local opt="${1%%=*}"
+        local val="${1#*=}"
+        opt="${opt#--}"; local var="${opt^^}"; var="${var//-/_}"
+        printf -v "${var}" '%s' "${val}"
+        shift ;;
+      --*)
+        local opt="${1#--}"; local var="${opt^^}"; var="${var//-/_}"
+        [[ $# -ge 2 ]] || die "Missing value for --${opt}"
+        printf -v "${var}" '%s' "$2"
+        shift 2 ;;
+      *) die "Unknown arg: $1" ;;
+    esac
+  done
 }
 
 # ---- Build HMC command safely — SSH → viosvrcmd (no eval)
@@ -109,6 +141,20 @@ run_hmc_vios() {
 
   log INFO "HMC: ${vios} :: ${ios_cmd}"
   "${full[@]}" 2> >(tee -a "${LOG_DIR}/hmc.err" >&2) | tee -a "${LOG_DIR}/hmc.out"
+}
+
+# ---- Run raw HMC command via SSH
+run_hmc() {
+  require_cmd ssh
+  local hmc_cmd="$*"
+  [[ "${hmc_cmd}" != *$'\n'* && "${hmc_cmd}" != *";"* && "${hmc_cmd}" != *$'\r'* ]] || die "Refusing unsafe command"
+  local ssh_cmd=(ssh -i "${HMC_SSH_KEY}" "${DEFAULT_SSH_OPTS[@]}" "${HMC_USER}@${HMC_HOST}" -- "${hmc_cmd}")
+  if [[ "${DRY_RUN}" == "1" || "${APPLY}" != "1" ]]; then
+    log INFO "[dry-run] ${ssh_cmd[*]}"
+    return 0
+  fi
+  log INFO "HMC: ${hmc_cmd}"
+  "${ssh_cmd[@]}" 2> >(tee -a "${LOG_DIR}/hmc.err" >&2) | tee -a "${LOG_DIR}/hmc.out"
 }
 
 # ---- Confirm destructive apply unless CI environment is set

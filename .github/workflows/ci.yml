@@ -11,9 +11,9 @@ jobs:
   shellcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4b41b3237a197458ad2de298c59bfec9ef2545e
       - name: ShellCheck
-        uses: ludeeus/action-shellcheck@v2
+        uses: ludeeus/action-shellcheck@b6236dad3b09e5b564e30f68720259e86cdc84e8
         with:
           scandir: './'
         env:
@@ -22,8 +22,8 @@ jobs:
   shfmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: ktomk/setup-shfmt@v10
+      - uses: actions/checkout@b4b41b3237a197458ad2de298c59bfec9ef2545e
+      - uses: ktomk/setup-shfmt@f7ed5480a219c2f4780e8851c42e9906efeedd28
         with: { shfmt: v3.7.0 }
       - name: Check formatting
         run: shfmt -d -i 2 -ci -sr .
@@ -31,18 +31,18 @@ jobs:
   bats:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4b41b3237a197458ad2de298c59bfec9ef2545e
       - name: Setup Bats
-        uses: bats-core/bats-action@2.0.0
+        uses: bats-core/bats-action@5df2103881a98389f43a4ce674563d6ba81ae3ae
       - name: Run tests
         run: bats -r tests
 
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4b41b3237a197458ad2de298c59bfec9ef2545e
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@cf6e9e78e2b7a003444b249bca7ff2809916900b
         env:
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
           GITLEAKS_ENABLE_SUMMARY: "true"
@@ -50,9 +50,9 @@ jobs:
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4b41b3237a197458ad2de298c59bfec9ef2545e
       - name: Lint GitHub Actions
-        uses: reviewdog/action-actionlint@v1
+        uses: reviewdog/action-actionlint@c4dfb4228e1e8b4d5900b0e564b9b0d0a26d4684
         with:
           actionlint_flags: -color
 
