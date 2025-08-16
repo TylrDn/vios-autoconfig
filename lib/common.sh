@@ -8,11 +8,9 @@ load_env() {
   local vars=(HMC_HOST HMC_USER)
   vars+=("$@")
   if [ -f "$REPO_ROOT/.env" ]; then
-    local perm=""
-    if ! perm=$(stat -c '%a' "$REPO_ROOT/.env" 2>/dev/null); then
-      perm=$(stat -f '%Lp' "$REPO_ROOT/.env" 2>/dev/null || true)
-    fi
-    if [ -n "$perm" ] && [ "$perm" != "600" ]; then
+    local perm
+    perm=$(ls -l "$REPO_ROOT/.env" | awk '{print $1}')
+    if [ "$perm" != "-rw-------" ]; then
       echo "ERROR: .env must have 600 permissions" >&2
       exit 1
     fi
@@ -22,7 +20,11 @@ load_env() {
   fi
   for var in "${vars[@]}"; do
     if [ -z "${!var:-}" ]; then
-      read -r -p "$var: " "$var"
+      if [[ ${var^^} =~ (PASSWORD|TOKEN|SECRET) ]]; then
+        read -r -s -p "$var: " "$var"; echo
+      else
+        read -r -p "$var: " "$var"
+      fi
       export "$var"
     fi
   done
@@ -161,12 +163,9 @@ vios_cmd() {
 enforce_marker() {
   local name="$1"
   local marker_dir="${TMPDIR:-/var/tmp}"
+  ensure_binary openssl
   local name_hash
-  if command -v md5sum >/dev/null 2>&1; then
-    name_hash=$(printf '%s' "$name" | md5sum | awk '{print $1}')
-  else
-    name_hash=$(printf '%s' "$name" | md5 | awk '{print $4}')
-  fi
+  name_hash=$(printf '%s' "$name" | openssl dgst -md5 | awk '{print $NF}')
   local marker="${marker_dir}/vios-autoconfig-${name_hash}.marker"
   if [ -e "$marker" ] && [ "$FORCE" -eq 0 ]; then
     log INFO "Marker exists for $name (hash: $name_hash)"
