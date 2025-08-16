@@ -12,7 +12,7 @@ jobs:
       - name: Verify tag
         run: |
           if [ -f VERSION ]; then
-            v=$(cat VERSION)
+            v=$(cat VERSION | awk '{$1=$1};1')
             if [ "v$v" != "${GITHUB_REF_NAME}" ]; then
               echo "Tag does not match VERSION file" >&2
               exit 1
@@ -32,6 +32,6 @@ jobs:
           name: dist
           path: dist/*
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@d8199f1870e7d2834e97e1f38da813e1ea977473
         with:
           files: dist/*
