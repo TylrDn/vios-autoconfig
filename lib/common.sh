@@ -20,14 +20,13 @@ load_env() {
   fi
   for var in "${vars[@]}"; do
     if [ -z "${!var:-}" ]; then
-      local var_uc val
+      local var_uc val is_secret
       var_uc=$(printf '%s' "$var" | tr '[:lower:]' '[:upper:]')
       case $var_uc in
-        *PASSWORD*|*TOKEN*|*SECRET*)
-          read -r -s -p "$var: " val; echo ;;
-        *)
-          read -r -p "$var: " val ;;
+        *PASSWORD*|*TOKEN*|*SECRET*) is_secret=1 ;;
       esac
+      read -r ${is_secret:+-s} -p "$var: " val
+      echo
       export "$var=$val"
     fi
   done
