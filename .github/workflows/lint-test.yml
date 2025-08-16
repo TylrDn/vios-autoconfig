@@ -1,0 +1,34 @@
+name: lint-test
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y shellcheck shfmt bats
+
+      - name: Shellcheck
+        run: |
+          set -euxo pipefail
+          find . -type f -name "*.sh" -print0 | xargs -0 -I{} shellcheck --severity=style --external-sources -f gcc {}
+
+      - name: Run tests
+        run: |
+          set -euxo pipefail
+          if compgen -G "tests/*.bats" > /dev/null; then
+            bats tests
+          else
+            echo "No Bats tests found; skipping."
+          fi
