@@ -30,49 +30,48 @@ jobs:
           sudo apt-get install -y shellcheck shfmt bats jq gawk git curl ca-certificates
 
           retry_curl() {
-            local url="$1" ; local out="${2:-/tmp/install.sh}"
+            local url="$1" ; local out="$2"
             local max=4 ; local i=1
-            while ! curl -fsSL "$url" -o "$out"; do
+            local curl_err
+            while true; do
+              curl_err=$(mktemp)
+              if curl -fsSL "$url" -o "$out" 2>"$curl_err"; then
+                rm -f "$curl_err"
+                break
+              fi
+              echo "curl attempt $i failed for ${url}" >&2
+              cat "$curl_err" >&2
+              rm -f "$curl_err"
               if [ "$i" -ge "$max" ]; then
-                echo "curl failed for ${url}" >&2
+                echo "curl failed for ${url} after $max attempts" >&2
                 return 1
               fi
-              sleep $((i * 2))
+              sleep $((2 ** i))
               i=$((i + 1))
             done
             chmod +x "$out"
           }
 
-          install_gitleaks() {
-            local tag="$1"
-            local url="https://raw.githubusercontent.com/gitleaks/gitleaks/${tag}/scripts/install.sh"
-            echo "::group::Install gitleaks (${tag})"
-            if retry_curl "$url"; then
-              sudo /usr/bin/env bash /tmp/install.sh -b /usr/local/bin
+          install_tool() {
+            local repo="$1" ; local tag="$2" ; shift 2
+            local url="https://raw.githubusercontent.com/${repo}/${tag}/install.sh"
+            local tmp
+            tmp=$(mktemp)
+            echo "::group::Install ${repo##*/} (${tag})"
+            if retry_curl "$url" "$tmp"; then
+              sudo /usr/bin/env bash "$tmp" "$@"
             else
-              echo "Pinned gitleaks tag ${tag} not available; using master…" >&2
-              retry_curl "https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh"
-              sudo /usr/bin/env bash /tmp/install.sh -b /usr/local/bin
+              echo "Pinned ${repo##*/} tag ${tag} not available; aborting." >&2
+              rm -f "$tmp"
+              echo "::endgroup::"
+              return 1
             fi
+            rm -f "$tmp"
             echo "::endgroup::"
           }
 
-          install_syft() {
-            local tag="$1"
-            local url="https://raw.githubusercontent.com/anchore/syft/${tag}/install.sh"
-            echo "::group::Install syft (${tag})"
-            if retry_curl "$url"; then
-              sudo /usr/bin/env bash /tmp/install.sh -b /usr/local/bin "${tag}"
-            else
-              echo "Pinned syft tag ${tag} not available; using main…" >&2
-              retry_curl "https://raw.githubusercontent.com/anchore/syft/main/install.sh"
-              sudo /usr/bin/env bash /tmp/install.sh -b /usr/local/bin
-            fi
-            echo "::endgroup::"
-          }
-
-          install_syft "${SYFT_VERSION}"
-          install_gitleaks "${GITLEAKS_VERSION}"
+          install_tool "anchore/syft" "${SYFT_VERSION}" -b /usr/local/bin "${SYFT_VERSION}"
+          install_tool "gitleaks/gitleaks" "${GITLEAKS_VERSION}" -b /usr/local/bin
 
           echo "::group::Versions"
           syft version
