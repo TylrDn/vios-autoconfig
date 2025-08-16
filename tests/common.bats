@@ -17,3 +17,15 @@ setup() {
   [[ "$output" == *"[dry-run]"* ]]
 }
 
+@test "parse_flags isolates variables" {
+  run bash -lc 'set -euo pipefail; IFS=$'"'\n\t'"'; . ./lib/common.sh; parse_flags --path /tmp --foo bar; [[ "$PATH" != "/tmp" && "$FLAG_FOO" == "bar" && "$FLAG_PATH" == "/tmp" ]] && echo ok'
+  [ "$status" -eq 0 ]
+  [ "$output" = "ok" ]
+}
+
+@test "run_hmc rejects unsafe metacharacters" {
+  run bash -lc 'set -euo pipefail; IFS=$'"'\n\t'"'; tmp=$(mktemp); chmod 600 "$tmp"; HMC_HOST=h HMC_USER=u HMC_SSH_KEY="$tmp" DRY_RUN=1 APPLY=1; . ./lib/common.sh; run_hmc ls "|" wc'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Refusing unsafe command"* ]]
+}
+

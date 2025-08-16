@@ -13,10 +13,15 @@ Env: DRY_RUN=1 or APPLY=1; ./.env supplies HMC_* variables
 EOF
 }
 
-VIOS=""; BACKING=""; TRUNK=""; VSWITCH=""; VLAN=""
 DRY_RUN="${DRY_RUN:-0}"; APPLY="${APPLY:-0}"
 
 parse_flags "$@"
+
+VIOS="${FLAG_VIOS:-}"
+BACKING="${FLAG_BACKING:-}"
+TRUNK="${FLAG_TRUNK:-}"
+VSWITCH="${FLAG_VSWITCH:-}"
+VLAN="${FLAG_VLAN:-}"
 
 [[ -n "${VIOS}" && -n "${BACKING}" && -n "${TRUNK}" && -n "${VSWITCH}" && -n "${VLAN}" ]] || { usage; exit 2; }
 

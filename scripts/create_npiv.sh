@@ -13,10 +13,14 @@ Env: DRY_RUN=1 or APPLY=1; ./.env supplies HMC_* variables
 EOF
 }
 
-MS=""; VIOS=""; LPAR=""; SLOT=""
 DRY_RUN="${DRY_RUN:-0}"; APPLY="${APPLY:-0}"
 
 parse_flags "$@"
+
+MS="${FLAG_MS:-}"
+VIOS="${FLAG_VIOS:-}"
+LPAR="${FLAG_LPAR:-}"
+SLOT="${FLAG_SLOT:-}"
 
 [[ -n "${MS}" && -n "${VIOS}" && -n "${LPAR}" && -n "${SLOT}" ]] || { usage; exit 2; }
 
@@ -29,8 +33,8 @@ common_init
 confirm_apply
 
 with_lock "npiv-${MS}-${LPAR}-${SLOT}" bash -c '
-  run_hmc "chhwres -m '"${MS}"' -r virtualio --rsubtype fc -o a -p '"${VIOS}"' -s '"${SLOT}"' -a adapter_type=server,remote_lpar_name='"${LPAR}"'"
-  run_hmc "chhwres -m '"${MS}"' -r virtualio --rsubtype fc -o a -p '"${LPAR}"' -s '"${SLOT}"' -a adapter_type=client,remote_lpar_name='"${VIOS}"'"
+  run_hmc chhwres -m '"${MS}"' -r virtualio --rsubtype fc -o a -p '"${VIOS}"' -s '"${SLOT}"' -a adapter_type=server,remote_lpar_name='"${LPAR}"''
+  run_hmc chhwres -m '"${MS}"' -r virtualio --rsubtype fc -o a -p '"${LPAR}"' -s '"${SLOT}"' -a adapter_type=client,remote_lpar_name='"${VIOS}"''
   run_hmc_vios '"${VIOS}"' "ioscli lsmap -all -npiv"
 '
 log INFO "NPIV mapping ensured: ${VIOS}<->${LPAR} slot ${SLOT}"
