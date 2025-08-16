@@ -20,16 +20,64 @@ jobs:
 
       - name: Install tools
         run: |
-          set -euxo pipefail
+          set -euo pipefail
+
+          # --- Versions: override via env if needed ---
+          GITLEAKS_VERSION="${GITLEAKS_VERSION:-v8.18.3}"
+          SYFT_VERSION="${SYFT_VERSION:-v1.19.0}"
+
           sudo apt-get update
-          sudo apt-get install -y shellcheck shfmt bats jq gawk git
-          # TODO: replace the commit hash below with the trusted commit for the gitleaks install script
-          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/0000000000000000000000000000000000000000/scripts/install.sh | \
-            bash -s -- -b /usr/local/bin
-          # TODO: replace the commit hash and version below with the desired syft release
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/0000000000000000000000000000000000000000/install.sh | sh -s -- -b /usr/local/bin v0.0.0
+          sudo apt-get install -y shellcheck shfmt bats jq gawk git curl ca-certificates
+
+          retry_curl() {
+            local url="$1" ; local out="${2:-/tmp/install.sh}"
+            local max=4 ; local i=1
+            while ! curl -fsSL "$url" -o "$out"; do
+              if [ "$i" -ge "$max" ]; then
+                echo "curl failed for ${url}" >&2
+                return 1
+              fi
+              sleep $((i * 2))
+              i=$((i + 1))
+            done
+            chmod +x "$out"
+          }
+
+          install_gitleaks() {
+            local tag="$1"
+            local url="https://raw.githubusercontent.com/gitleaks/gitleaks/${tag}/scripts/install.sh"
+            echo "::group::Install gitleaks (${tag})"
+            if retry_curl "$url"; then
+              sudo /usr/bin/env bash /tmp/install.sh -b /usr/local/bin
+            else
+              echo "Pinned gitleaks tag ${tag} not available; using master…" >&2
+              retry_curl "https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh"
+              sudo /usr/bin/env bash /tmp/install.sh -b /usr/local/bin
+            fi
+            echo "::endgroup::"
+          }
+
+          install_syft() {
+            local tag="$1"
+            local url="https://raw.githubusercontent.com/anchore/syft/${tag}/install.sh"
+            echo "::group::Install syft (${tag})"
+            if retry_curl "$url"; then
+              sudo /usr/bin/env bash /tmp/install.sh -b /usr/local/bin "${tag}"
+            else
+              echo "Pinned syft tag ${tag} not available; using main…" >&2
+              retry_curl "https://raw.githubusercontent.com/anchore/syft/main/install.sh"
+              sudo /usr/bin/env bash /tmp/install.sh -b /usr/local/bin
+            fi
+            echo "::endgroup::"
+          }
+
+          install_syft "${SYFT_VERSION}"
+          install_gitleaks "${GITLEAKS_VERSION}"
+
+          echo "::group::Versions"
           syft version
           gitleaks version
+          echo "::endgroup::"
 
       - name: Format check (shfmt)
         run: |
