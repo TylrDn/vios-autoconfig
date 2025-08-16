@@ -9,8 +9,8 @@ load_env() {
   vars+=("$@")
   if [ -f "$REPO_ROOT/.env" ]; then
     local perm
-    perm=$(ls -l "$REPO_ROOT/.env" | awk '{print $1}')
-    if [ "$perm" != "-rw-------" ]; then
+    perm=$(stat -c '%a' "$REPO_ROOT/.env" 2>/dev/null || stat -f '%OLp' "$REPO_ROOT/.env" 2>/dev/null)
+    if [ "$perm" != "600" ]; then
       echo "ERROR: .env must have 600 permissions" >&2
       exit 1
     fi
@@ -20,11 +20,14 @@ load_env() {
   fi
   for var in "${vars[@]}"; do
     if [ -z "${!var:-}" ]; then
-      if [[ ${var^^} =~ (PASSWORD|TOKEN|SECRET) ]]; then
-        read -r -s -p "$var: " "$var"; echo
-      else
-        read -r -p "$var: " "$var"
-      fi
+      local var_uc
+      var_uc=$(printf '%s' "$var" | tr '[:lower:]' '[:upper:]')
+      case $var_uc in
+        *PASSWORD*|*TOKEN*|*SECRET*)
+          read -r -s -p "$var: " "$var"; echo ;;
+        *)
+          read -r -p "$var: " "$var" ;;
+      esac
       export "$var"
     fi
   done
@@ -165,7 +168,7 @@ enforce_marker() {
   local marker_dir="${TMPDIR:-/var/tmp}"
   ensure_binary openssl
   local name_hash
-  name_hash=$(printf '%s' "$name" | openssl dgst -md5 | awk '{print $NF}')
+  name_hash=$(printf '%s' "$name" | openssl dgst -md5 -r | awk '{print $1}')
   local marker="${marker_dir}/vios-autoconfig-${name_hash}.marker"
   if [ -e "$marker" ] && [ "$FORCE" -eq 0 ]; then
     log INFO "Marker exists for $name (hash: $name_hash)"
