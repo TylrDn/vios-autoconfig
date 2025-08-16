@@ -16,15 +16,7 @@ EOF
 VIOS=""
 DRY_RUN="${DRY_RUN:-0}"; APPLY="${APPLY:-0}"
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --vios) VIOS="$2"; shift 2 ;;
-    --dry-run) DRY_RUN=1; shift ;;
-    --apply) APPLY=1; shift ;;
-    -h|--help) usage; exit 0 ;;
-    *) die "Unknown arg: $1" ;;
-  esac
-done
+parse_flags "$@"
 
 [[ -n "${VIOS}" ]] || { usage; exit 2; }
 [[ "${VIOS}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "Invalid VIOS: ${VIOS}"

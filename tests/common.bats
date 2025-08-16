@@ -6,7 +6,7 @@ setup() {
 }
 
 @test "lib/common.sh loads without env (missing vars) -> fails" {
-  run bash -c 'set -euo pipefail; IFS=$'"'\n\t'"'; . ./lib/common.sh; load_env /dev/null'
+  run bash -c 'set -euo pipefail; IFS=$'"'\n\t'"'; tmp=$(mktemp); chmod 600 "$tmp"; . ./lib/common.sh; load_env "$tmp"'
   [ "$status" -ne 0 ]
   [[ "$output" == *"HMC_HOST is required"* ]]
 }
