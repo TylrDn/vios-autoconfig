@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag
+        run: |
+          if [ -f VERSION ]; then
+            v=$(cat VERSION)
+            if [ "v$v" != "${GITHUB_REF_NAME}" ]; then
+              echo "Tag does not match VERSION file" >&2
+              exit 1
+            fi
+          fi
+      - name: Package
+        env:
+          VERSION: ${GITHUB_REF_NAME#v}
+        run: |
+          set -e
+          mkdir -p dist
+          tar --sort=name --owner=0 --group=0 --numeric-owner -czf dist/vios-autoconfig-${VERSION}.tar.gz scripts lib maps README.md LICENSE .env.example
+          sha256sum dist/vios-autoconfig-${VERSION}.tar.gz > dist/vios-autoconfig-${VERSION}.tar.gz.sha256
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*

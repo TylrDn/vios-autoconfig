@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+echo "[MOCK] viosvrcmd $*" >&2
+if [[ "$*" == *"lsmap -all"* ]]; then
+  echo "c50 fcs0 10:00:00:00:00:00:00:01 vhost0"
+fi

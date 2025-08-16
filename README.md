@@ -65,3 +65,15 @@ bats tests
 Issues and pull requests are welcome.  Please run `shellcheck` and the full test
 suite before submitting changes.  Continuous integration is provided via
 GitHub Actions (`.github/workflows/ci.yaml`).
+
+## CI / Tests
+
+Run developer checks with `make`:
+
+```bash
+make fmt       # formatting check
+make lint      # shellcheck and gitleaks
+make test      # run bats tests with mocks
+```
+
+Use `make fmt-write` to apply formatting. CI executes `make lint test` on pushes and pull requests.
