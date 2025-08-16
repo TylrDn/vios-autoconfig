@@ -36,22 +36,48 @@ confirm() {
   [[ "$ans" =~ ^[Yy]$ ]]
 }
 
+parse_flags() {
+  DRY_RUN=1
+  if [ "${APPLY:-0}" -eq 1 ]; then DRY_RUN=0; fi
+  ARGS=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dry-run) DRY_RUN=1 ;;
+      --apply) DRY_RUN=0 ;;
+      --help) usage; exit 0 ;;
+      *) ARGS+=("$1") ;;
+    esac
+    shift
+  done
+  if [ "$DRY_RUN" -eq 0 ]; then APPLY=1; else APPLY=0; fi
+}
+
 run_cmd() {
   if [ "${DRY_RUN:-1}" -eq 1 ]; then
-    echo "$@"
+    printf '%q ' "$@"
+    printf '\n'
   else
-    eval "$@"
+    "$@"
   fi
 }
 
 H() {
   require_env HMC_HOST HMC_USER
-  run_cmd ssh $SSH_OPTS "$HMC_USER@$HMC_HOST" "$@"
+  local ssh=(ssh)
+  if [ -n "${SSH_OPTS:-}" ]; then
+    # shellcheck disable=SC2206
+    ssh+=($SSH_OPTS)
+  fi
+  ssh+=("$HMC_USER@$HMC_HOST")
+  run_cmd "${ssh[@]}" "$*"
 }
 
 VRCMD() {
   local vios="$1"; shift
-  H "viosvrcmd -m $MS -p $vios -c '$*'"
+  local cmd
+  printf -v cmd '%s ' "$@"
+  cmd=${cmd% }
+  H "viosvrcmd -m \"$MS\" -p \"$vios\" -c '$cmd'"
 }
 
 ensure_once() {
