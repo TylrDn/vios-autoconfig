@@ -1,29 +1,46 @@
 #!/usr/bin/env bash
+# scripts/map_scsi.sh - map an hdisk to an LPAR via vhost
 set -euo pipefail
+IFS=$'\n\t'
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/common.sh
+. "${SCRIPT_DIR%/scripts}/lib/common.sh"
 
-SCRIPT_DIR="$(cd "${BASH_SOURCE%/*}" && pwd)"
-. "$SCRIPT_DIR/../lib/common.sh"
+usage() {
+  cat <<EOF
+Usage: $0 --vios <vios> --lpar <lpar> --vhost <vhost> --disk <hdiskN> [--dry-run] [--apply]
+Env: DRY_RUN=1 or APPLY=1; ./.env supplies HMC_* variables
+EOF
+}
 
-usage(){ echo "Usage: $0 <LPAR> <hdiskN> [--dry-run]" >&2; exit 1; }
+VIOS=""; LPAR=""; VHOST=""; DISK=""
+DRY_RUN="${DRY_RUN:-0}"; APPLY="${APPLY:-0}"
 
-parse_flags "$@"
-set -- "${ARGS[@]}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --vios) VIOS="$2"; shift 2 ;;
+    --lpar) LPAR="$2"; shift 2 ;;
+    --vhost) VHOST="$2"; shift 2 ;;
+    --disk) DISK="$2"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --apply) APPLY=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "Unknown arg: $1" ;;
+  esac
+done
 
-[ "$#" -ge 2 ] || usage
-LPAR="$1"; DISK="$2"; shift 2
+[[ -n "${VIOS}" && -n "${LPAR}" && -n "${VHOST}" && -n "${DISK}" ]] || { usage; exit 2; }
 
-require_env MS VIOS1
+for x in "${VIOS}" "${LPAR}" "${VHOST}" "${DISK}"; do
+  [[ "${x}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "Invalid token: ${x}"
+done
 
-VHOST_CMD="lshwres -m \"$MS\" -r virtualio --rsubtype scsi -F phys_loc,client_lpar_name | grep ',"$LPAR"$' | cut -d, -f1"
-if [ "$DRY_RUN" -eq 1 ]; then
-  H "$VHOST_CMD"
-  VHOST="vhost?"
-else
-  VHOST=$(H "$VHOST_CMD")
-fi
+common_init
+confirm_apply
 
-log info "Mapping $DISK to $LPAR via $VHOST"
-H "mkvdev -m \"$MS\" -vdev \"$DISK\" -vadapter \"$VHOST\""
-H "lsmap -vadapter \"$VHOST\""
+with_lock "map-${LPAR}-${DISK}" bash -c '
+  run_hmc_vios "'"${VIOS}"'" "ioscli mkvdev -vdev '"${DISK}"' -vadapter '"${VHOST}"'"
+  run_hmc_vios "'"${VIOS}"'" "ioscli lsmap -vadapter '"${VHOST}"'"
+'
+log INFO "Mapped ${DISK} to ${LPAR} via ${VHOST} on ${VIOS}"
 
-echo "MAPPED=$LPAR:$DISK"

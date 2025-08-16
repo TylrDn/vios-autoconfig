@@ -1,179 +1,128 @@
 #!/usr/bin/env bash
+# lib/common.sh - shared safety, logging, and HMC helpers
+# Follows Google Shell Style Guide & OWASP shell safety guidance.
+
 set -euo pipefail
+IFS=$'\n\t'
+umask 077
 
-REPO_ROOT="$(cd "${BASH_SOURCE%/*}/.." && pwd)"
+# ---- Globals (readonly)
+readonly APP_NAME="vios-autoconfig"
+readonly STATE_DIR="/var/tmp/${APP_NAME}"
+readonly LOCK_DIR="${STATE_DIR}/locks"
+readonly LOG_DIR="${STATE_DIR}/logs"
+readonly KNOWN_HOSTS="${STATE_DIR}/known_hosts"
+readonly DEFAULT_SSH_OPTS=(
+  -o BatchMode=yes
+  -o IdentitiesOnly=yes
+  -o StrictHostKeyChecking=yes
+  -o UserKnownHostsFile="${KNOWN_HOSTS}"
+  -o ConnectTimeout=10
+  -o ServerAliveInterval=15
+  -o ServerAliveCountMax=3
+)
 
-# ---- environment handling ---------------------------------------------------
+mkdir -p "${LOCK_DIR}" "${LOG_DIR}"
+: > "${LOG_DIR}/run.log"
+
+# ---- Logging (redact sensitive values)
+_redact() {
+  sed -E 's/\b((passw(or)?d|token|secret|key)=)[^[:space:]]+/\1REDACTED/gi'
+}
+_ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+log() { printf '%s [%s] %s\n' "$(_ts)" "${1:-INFO}" "${*:2}" | _redact | tee -a "${LOG_DIR}/run.log" >&2; }
+die() { log ERROR "$*"; exit 1; }
+
+# ---- Require commands
+require_cmd() { command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"; }
+
+# ---- Load .env (if present) and enforce required vars
 load_env() {
-  local vars=(HMC_HOST HMC_USER)
-  vars+=("$@")
-  if [ -f "$REPO_ROOT/.env" ]; then
-    local perm
-    perm=$(stat -c '%a' "$REPO_ROOT/.env" 2>/dev/null || stat -f '%OLp' "$REPO_ROOT/.env" 2>/dev/null)
-    if [ "$perm" != "600" ]; then
-      echo "ERROR: .env must have 600 permissions" >&2
-      exit 1
-    fi
-    set -a
-    . "$REPO_ROOT/.env"
-    set +a
+  local env_file="${1:-.env}"
+  if [[ -f "${env_file}" ]]; then
+    # shellcheck disable=SC1090
+    set -a; . "${env_file}"; set +a
   fi
-  for var in "${vars[@]}"; do
-    if [ -z "${!var:-}" ]; then
-      local var_uc val is_secret
-      var_uc=$(printf '%s' "$var" | tr '[:lower:]' '[:upper:]')
-      case $var_uc in
-        *PASSWORD*|*TOKEN*|*SECRET*) is_secret=1 ;;
-      esac
-      read -r ${is_secret:+-s} -p "$var: " val
-      echo
-      export "$var=$val"
-    fi
-  done
-  require_env "${vars[@]}"
+  : "${HMC_HOST:?HMC_HOST is required}"
+  : "${HMC_USER:?HMC_USER is required}"
+  : "${HMC_SSH_KEY:?HMC_SSH_KEY is required}"
+  [[ -f "${HMC_SSH_KEY}" ]] || die "HMC_SSH_KEY not found: ${HMC_SSH_KEY}"
+  chmod 600 "${HMC_SSH_KEY}" 2>/dev/null || true
+  export HMC_HOST HMC_USER HMC_SSH_KEY
 }
 
-mask() {
-  local s="$*"
-  local v val
-  for v in $(compgen -v | grep -iE 'pass|password|token|secret'); do
-    val=${!v}
-    [ -n "$val" ] && s=${s//${val}/****}
-  done
-  printf '%s' "$s"
-}
-
-# ---- logging ----------------------------------------------------------------
-LOG_LEVEL=${LOG_LEVEL:-2} # 0=ERROR,1=WARN,2=INFO,3=DEBUG
-
-log() {
-  local level=$1; shift
-  local level_num
-  case $level in
-    ERROR) level_num=0 ;;
-    WARN)  level_num=1 ;;
-    INFO)  level_num=2 ;;
-    DEBUG) level_num=3 ;;
-    *)     level_num=2 ;;
-  esac
-  if [ "$LOG_LEVEL" -ge "$level_num" ]; then
-    printf '[%s] %s\n' "$level" "$*" >&2
+# ---- Host key pinning (idempotent, hashed entries)
+pin_hostkey() {
+  require_cmd ssh-keyscan
+  require_cmd ssh-keygen
+  local host="$1"
+  [[ "${host}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "Invalid HMC host: ${host}"
+  touch "${KNOWN_HOSTS}"
+  chmod 600 "${KNOWN_HOSTS}"
+  if ! ssh-keygen -F "${host}" -f "${KNOWN_HOSTS}" >/dev/null 2>&1; then
+    log INFO "Pinning SSH host key for ${host}"
+    ssh-keyscan -T 5 -H "${host}" >>"${KNOWN_HOSTS}" 2>>"${LOG_DIR}/ssh-keyscan.log" || die "Failed to pin host key for ${host}"
   fi
 }
 
-# ---- flag parsing -----------------------------------------------------------
-DRY_RUN=1
-FORCE=0
-AUTO_YES=0
-
-parse_common_flags() {
-  POSITIONAL=()
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --dry-run) DRY_RUN=1; shift ;;
-      --force) FORCE=1; shift ;;
-      --yes) AUTO_YES=1; shift ;;
-      --verbose) LOG_LEVEL=3; shift ;;
-      --help) usage; exit 0 ;;
-      --) shift; POSITIONAL+=("$@"); break ;;
-      -*) POSITIONAL+=("$@"); break ;;
-      *) POSITIONAL+=("$@"); break ;;
-    esac
-  done
+# ---- Concurrency lock using flock
+with_lock() {
+  local name="$1"; shift
+  local lock="${LOCK_DIR}/${name}.lock"
+  exec 9>"${lock}"
+  if ! flock -n 9; then
+    die "Another process holds lock: ${name}"
+  fi
+  "$@"
 }
 
-# ---- helpers ----------------------------------------------------------------
-require_env() {
-  local missing=0
-  for var in "$@"; do
-    if [ -z "${!var:-}" ]; then
-      log ERROR "Missing env var: $var"
-      missing=1
-    fi
-  done
-  [ "$missing" -eq 0 ] || exit 1
-}
-ensure_binary() {
-  for b in "$@"; do
-    if ! command -v "$b" >/dev/null 2>&1; then
-      log ERROR "Missing required binary: $b"
-      exit 1
-    fi
-  done
-}
-
-confirm() {
-  local q="$1"
-  if [ "$AUTO_YES" -eq 1 ] || [ "$DRY_RUN" -eq 1 ]; then
+# ---- Safe command runner (dry-run aware)
+DRY_RUN="${DRY_RUN:-0}"
+APPLY="${APPLY:-0}"
+run() {
+  if [[ "${DRY_RUN}" == "1" || "${APPLY}" != "1" ]]; then
+    log INFO "[dry-run] $*"
     return 0
   fi
-  read -r -p "$q [y/N]: " ans
-  [[ "$ans" =~ ^[Yy]$ ]]
+  log INFO "RUN: $*"
+  "$@"
 }
 
-retry() {
-  local retries=${RETRIES:-3}
-  local delay=${RETRY_DELAY:-1}
-  local attempt=0
-  until "$@"; do
-    rc=$?
-    if [ "$attempt" -ge "$retries" ]; then
-      return "$rc"
-    fi
-    attempt=$(( attempt + 1 ))
-    log WARN "Retrying ($attempt/$retries)..."
-    sleep "$delay"
-  done
-}
-
-run_cmd() {
-  if [ "$DRY_RUN" -eq 1 ]; then
-    log INFO "$(mask "$*")"
-    return 0
-  fi
-  local out rc
-  out=$(retry "$@" 2>&1) && rc=0 || rc=$?
-  if [ "$rc" -ne 0 ]; then
-    if [ "$rc" -eq 255 ]; then
-      log ERROR "$out"
-      exit 2
-    fi
-    log ERROR "$out"
-    exit 3
-  fi
-  [ "$LOG_LEVEL" -ge 3 ] && log DEBUG "$out"
-}
-
-hmc_cli() {
-  require_env HMC_HOST HMC_USER
-  ensure_binary ssh
-  local ssh=(ssh)
-  if [ -n "${SSH_OPTS:-}" ]; then
-    # shellcheck disable=SC2206
-    ssh+=($SSH_OPTS)
-  fi
-  ssh+=("$HMC_USER@$HMC_HOST" "$*")
-  run_cmd "${ssh[@]}"
-}
-
-vios_cmd() {
+# ---- Build HMC command safely — SSH → viosvrcmd (no eval)
+# Example: run_hmc_vios "vios1" "ioscli chdev -dev ent0 -attr jumbo_frames=yes"
+run_hmc_vios() {
+  require_cmd ssh
   local vios="$1"; shift
-  require_env MS
-  hmc_cli "viosvrcmd -m \"$MS\" -p \"$vios\" -c '$*'"
+  local ios_cmd="$*"
+
+  [[ "${vios}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "Invalid VIOS name: ${vios}"
+  # Conservative injection guard (reject control chars, newlines, semicolons)
+  [[ "${ios_cmd}" != *$'\n'* && "${ios_cmd}" != *";"* && "${ios_cmd}" != *$'\r'* ]] || die "Refusing unsafe command"
+
+  local ssh_cmd=(ssh -i "${HMC_SSH_KEY}" "${DEFAULT_SSH_OPTS[@]}" "${HMC_USER}@${HMC_HOST}")
+  local full=( "${ssh_cmd[@]}" -- viosvrcmd -m "${vios}" -c "${ios_cmd}" )
+
+  if [[ "${DRY_RUN}" == "1" || "${APPLY}" != "1" ]]; then
+    log INFO "[dry-run] ${full[*]}"
+    return 0
+  fi
+
+  log INFO "HMC: ${vios} :: ${ios_cmd}"
+  "${full[@]}" 2> >(tee -a "${LOG_DIR}/hmc.err" >&2) | tee -a "${LOG_DIR}/hmc.out"
 }
 
-enforce_marker() {
-  local name="$1"
-  local marker_dir="${TMPDIR:-/var/tmp}"
-  ensure_binary openssl
-  local name_hash
-  name_hash=$(printf '%s' "$name" | openssl dgst -md5 -r | awk '{print $1}')
-  local marker="${marker_dir}/vios-autoconfig-${name_hash}.marker"
-  if [ -e "$marker" ] && [ "$FORCE" -eq 0 ]; then
-    log INFO "Marker exists for $name (hash: $name_hash)"
-    return 1
+# ---- Confirm destructive apply unless CI environment is set
+confirm_apply() {
+  if [[ "${APPLY}" == "1" && -z "${CI:-}" ]]; then
+    read -r -p "About to APPLY changes — type 'apply' to continue: " ans
+    [[ "${ans}" == "apply" ]] || die "User aborted"
   fi
-  mkdir -p "$marker_dir"
-  : > "$marker"
-  return 0
 }
+
+# ---- Initialization helper
+common_init() {
+  load_env "${1:-.env}"
+  pin_hostkey "${HMC_HOST}"
+  require_cmd ssh
+}
+

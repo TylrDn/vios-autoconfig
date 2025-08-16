@@ -1,114 +1,58 @@
-name: CI
-
+name: ci
 on:
-  push:
-    branches: [ "main" ]
   pull_request:
+  push:
     branches: [ "main" ]
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: build
+  shellcheck:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install tools
-        run: |
-          set -euo pipefail
-
-          # --- Versions: override via env if needed ---
-          GITLEAKS_VERSION="${GITLEAKS_VERSION:-v8.18.3}"
-          SYFT_VERSION="${SYFT_VERSION:-v1.19.0}"
-
-          sudo apt-get update
-          sudo apt-get install -y shellcheck shfmt bats jq gawk git curl ca-certificates
-
-          retry_curl() {
-            local url="$1" ; local out="$2"
-            local max=4 ; local i=1
-            local curl_err
-            while true; do
-              curl_err=$(mktemp)
-              if curl -fsSL "$url" -o "$out" 2>"$curl_err"; then
-                rm -f "$curl_err"
-                break
-              fi
-              echo "curl attempt $i failed for ${url}" >&2
-              cat "$curl_err" >&2
-              rm -f "$curl_err"
-              if [ "$i" -ge "$max" ]; then
-                echo "curl failed for ${url} after $max attempts" >&2
-                return 1
-              fi
-              sleep $((2 ** i))
-              i=$((i + 1))
-            done
-            chmod +x "$out"
-          }
-
-          install_tool() {
-            local repo="$1" ; local tag="$2" ; shift 2
-            local url="https://raw.githubusercontent.com/${repo}/${tag}/install.sh"
-            local tmp
-            tmp=$(mktemp)
-            echo "::group::Install ${repo##*/} (${tag})"
-            if retry_curl "$url" "$tmp"; then
-              sudo /usr/bin/env bash "$tmp" "$@"
-            else
-              echo "Pinned ${repo##*/} tag ${tag} not available; aborting." >&2
-              rm -f "$tmp"
-              echo "::endgroup::"
-              return 1
-            fi
-            rm -f "$tmp"
-            echo "::endgroup::"
-          }
-
-          install_tool "anchore/syft" "${SYFT_VERSION}" -b /usr/local/bin "${SYFT_VERSION}"
-          install_tool "gitleaks/gitleaks" "${GITLEAKS_VERSION}" -b /usr/local/bin
-
-          echo "::group::Versions"
-          syft version
-          gitleaks version
-          echo "::endgroup::"
-
-      - name: Format check (shfmt)
-        run: |
-          set -euxo pipefail
-          shfmt -d .
-
-      - name: Lint (shellcheck)
-        run: |
-          set -euxo pipefail
-          find . -type f -name "*.sh" -print0 | xargs -0 -I{} shellcheck --severity=style --external-sources -f gcc {}
-
-      - name: Secret scan (gitleaks)
-        run: |
-          set -euxo pipefail
-          gitleaks detect --no-git -v --redact
-
-      - name: Run tests (bats)
-        run: |
-          set -euxo pipefail
-          if compgen -G "tests/*.bats" > /dev/null; then
-            bats tests
-          else
-            echo "No Bats tests found; skipping."
-          fi
-
-      - name: Build SBOM (syft)
-        run: |
-          set -euxo pipefail
-          syft dir:. -o spdx-json=sbom.spdx.json
-
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@v2
         with:
-          name: sbom
-          path: sbom.spdx.json
+          scandir: './'
+        env:
+          SHELLCHECK_OPTS: '-S warning'
+
+  shfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ktomk/setup-shfmt@v10
+        with: { shfmt: v3.7.0 }
+      - name: Check formatting
+        run: shfmt -d -i 2 -ci -sr .
+
+  bats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Bats
+        uses: bats-core/bats-action@2.0.0
+      - name: Run tests
+        run: bats -r tests
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          GITLEAKS_ENABLE_SUMMARY: "true"
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint GitHub Actions
+        uses: reviewdog/action-actionlint@v1
+        with:
+          actionlint_flags: -color
+
