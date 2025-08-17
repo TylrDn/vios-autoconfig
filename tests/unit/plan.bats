@@ -53,3 +53,14 @@ load '../test_helper/bats-assert/load'
   [ "$status" -ne 0 ]
   [[ "$output" == *"Unknown action: totally-unknown"* ]]
 }
+
+@test "plan_apply rejects host value null" {
+  run bash -lc '
+    . ./lib/plan.sh;
+    plan_init;
+    echo "{\"action\":\"pin-hostkey\",\"host\":null}" >> "$PLAN_PATH";
+    plan_apply
+  '
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"pin-hostkey missing host"* ]]
+}

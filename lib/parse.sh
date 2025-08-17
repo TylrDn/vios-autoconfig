@@ -11,21 +11,15 @@ readonly YAML_GET_ERR_MISSING=3   # requested key not found
 yaml_get() {
   require_cmd python3
   local file="$1" key="$2"
-  RUNTIME_ERR="$YAML_GET_ERR_RUNTIME" \
-  PARSE_ERR="$YAML_GET_ERR_PARSE" \
-  MISSING_KEY_ERR="$YAML_GET_ERR_MISSING" \
-  python3 - "$file" "$key" <<'PY'
-import os, sys, json
-runtime_err = int(os.environ["RUNTIME_ERR"])
-parse_err = int(os.environ["PARSE_ERR"])
-missing_key_err = int(os.environ["MISSING_KEY_ERR"])
+  python3 - "$file" "$key" "$YAML_GET_ERR_RUNTIME" "$YAML_GET_ERR_PARSE" "$YAML_GET_ERR_MISSING" <<'PY'
+import sys, json
+file, key, runtime_err, parse_err, missing_key_err = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])
 try:
     import yaml
 except Exception:
     sys.exit(parse_err)  # parse error / missing dependency
 
 try:
-    file, key = sys.argv[1], sys.argv[2]
     with open(file) as f:
         data = yaml.safe_load(f)
 except yaml.YAMLError:
@@ -33,8 +27,23 @@ except yaml.YAMLError:
 except Exception:
     sys.exit(runtime_err)
 
+# Split key on unescaped dots; "\." denotes a literal dot in the key
+parts, buf, esc = [], "", False
+for ch in key:
+    if esc:
+        buf += ch
+        esc = False
+    elif ch == "\\":
+        esc = True
+    elif ch == ".":
+        parts.append(buf)
+        buf = ""
+    else:
+        buf += ch
+parts.append(buf)
+
 val = data
-for part in key.split('.'):
+for part in parts:
     if isinstance(val, dict):
         val = val.get(part)
     else:

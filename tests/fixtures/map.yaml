@@ -1,2 +1,3 @@
 hmc:
   host: test-hmc.example.com
+"with.dot": dot-value
