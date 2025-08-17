@@ -1,3 +1,5 @@
 hmc:
   host: test-hmc.example.com
 "with.dot": dot-value
+"with..dots": double-dot-value
+"with\\backslash": backslash-value
