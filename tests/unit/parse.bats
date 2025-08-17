@@ -9,7 +9,8 @@ load '../test_helper/bats-assert/load'
   [ "$output" = "test-hmc.example.com" ]
 }
 
-@test "yaml_get returns exit code 3 when key missing" {
+@test "yaml_get returns missing key exit code when key missing" {
+  missing_code=$(bash -lc '. ./lib/parse.sh; echo $YAML_GET_ERR_MISSING')
   run bash -lc '. ./lib/parse.sh; yaml_get tests/fixtures/map.yaml does.not.exist'
-  [ "$status" -eq 3 ]
+  [ "$status" -eq "$missing_code" ]
 }

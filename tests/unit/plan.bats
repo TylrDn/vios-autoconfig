@@ -43,7 +43,7 @@ load '../test_helper/bats-assert/load'
   [ "$output" = $'PIN:good.example\nPIN:good2.example' ]
 }
 
-@test "plan_apply fails fast on unknown action" {
+@test "plan_apply reports error on unknown action" {
   run bash -lc '
     . ./lib/plan.sh;
     plan_init;
@@ -51,4 +51,5 @@ load '../test_helper/bats-assert/load'
     plan_apply
   '
   [ "$status" -ne 0 ]
+  [[ "$output" == *"Unknown action: totally-unknown"* ]]
 }
