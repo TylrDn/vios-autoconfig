@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Stub ssh-keyscan for tests
+while getopts 'H:T:' opt; do :; done
+shift $((OPTIND-1))
+host=$1
+echo "$host ssh-rsa AAAAFakeKey"
