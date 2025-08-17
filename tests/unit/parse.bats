@@ -20,3 +20,15 @@ load '../test_helper/bats-assert/load'
   [ "$status" -eq 0 ]
   [ "$output" = "dot-value" ]
 }
+
+@test "yaml_get handles consecutive escaped dots" {
+  run bash -lc '. ./lib/parse.sh; yaml_get tests/fixtures/map.yaml with\\.\\.dots'
+  [ "$status" -eq 0 ]
+  [ "$output" = "double-dot-value" ]
+}
+
+@test "yaml_get handles literal backslashes" {
+  run bash -lc '. ./lib/parse.sh; yaml_get tests/fixtures/map.yaml with\\\\backslash'
+  [ "$status" -eq 0 ]
+  [ "$output" = "backslash-value" ]
+}

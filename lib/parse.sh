@@ -28,19 +28,26 @@ except Exception:
     sys.exit(runtime_err)
 
 # Split key on unescaped dots; "\." denotes a literal dot in the key
-parts, buf, esc = [], "", False
-for ch in key:
+def split_key(path):
+    """Split a dotted key into components, honoring backslash escapes."""
+    parts, buf, esc = [], "", False
+    for ch in path:
+        if esc:
+            buf += ch
+            esc = False
+        elif ch == "\\":
+            esc = True
+        elif ch == ".":
+            parts.append(buf)
+            buf = ""
+        else:
+            buf += ch
     if esc:
-        buf += ch
-        esc = False
-    elif ch == "\\":
-        esc = True
-    elif ch == ".":
-        parts.append(buf)
-        buf = ""
-    else:
-        buf += ch
-parts.append(buf)
+        buf += "\\"
+    parts.append(buf)
+    return parts
+
+parts = split_key(key)
 
 val = data
 for part in parts:

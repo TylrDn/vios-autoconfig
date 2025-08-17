@@ -61,8 +61,8 @@ plan_apply() {
     case "$action" in
       pin-hostkey)
         local host
-        host="$(printf '%s' "$line" | jq -r '.host')"
-        if [[ -z "$host" || "$host" == "null" ]]; then
+        host="$(printf '%s' "$line" | jq -r '.host // empty')"
+        if [[ -z "$host" ]]; then
           log ERROR "pin-hostkey missing host"
           status=1
           continue
