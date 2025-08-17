@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
 SCRIPT_DIR="$(cd "${BASH_SOURCE%/*}" && pwd)"
-. "$SCRIPT_DIR/lib/common.sh"
+. "$SCRIPT_DIR/lib/header.sh"
 
 usage() {
 cat <<USAGE

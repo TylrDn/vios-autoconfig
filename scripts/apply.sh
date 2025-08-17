@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 # scripts/apply.sh - apply a previously generated plan
-set -euo pipefail
-IFS=$'\n\t'
-LC_ALL=C
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/common.sh
-. "${SCRIPT_DIR%/scripts}/lib/common.sh"
-# shellcheck source=../lib/plan.sh
+. "${SCRIPT_DIR%/scripts}/lib/header.sh"
 . "${SCRIPT_DIR%/scripts}/lib/plan.sh"
 
 usage() { echo "Usage: $0 <plan.jsonl>"; }

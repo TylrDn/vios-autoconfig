@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # lib/ssh.sh - thin wrapper around ssh enforcing default options
-set -euo pipefail
-IFS=$'\n\t'
-LC_ALL=C
-# shellcheck source=./common.sh
+. "$(dirname "${BASH_SOURCE[0]}")/header.sh"
 
 ssh_safe() {
   require_cmd ssh

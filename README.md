@@ -51,6 +51,9 @@ usage details.
 - Idempotency markers in `${TMPDIR:-/var/tmp}/vios-autoconfig-*` prevent repeated work
   unless `--force` is supplied.
 - Logging uses INFO/WARN/ERROR levels and masks credentials.
+- Scripts source a central `lib/header.sh` which applies shell safety flags and logging setup.
+- `yaml_get` returns exit code **3** when a key is missing (distinct from parse/runtime errors).
+- `plan_apply` now exits non-zero on unknown actions; malformed JSON lines are logged and skipped.
 
 ## Testing
 
