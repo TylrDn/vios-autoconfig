@@ -62,7 +62,7 @@ plan_apply() {
       pin-hostkey)
         local host
         host="$(printf '%s' "$line" | jq -r '.host')"
-        if [[ -z "$host" ]]; then
+        if [[ -z "$host" || "$host" == "null" ]]; then
           log ERROR "pin-hostkey missing host"
           status=1
           continue
@@ -72,9 +72,10 @@ plan_apply() {
       *)
         log ERROR "Unknown action: $action"
         status=1
+        # Continue processing to report all unknown actions
         continue
         ;;
     esac
   done <"${PLAN_PATH}"
-  return "$status"
+  return $status
 }

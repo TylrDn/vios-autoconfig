@@ -14,3 +14,9 @@ load '../test_helper/bats-assert/load'
   run bash -lc '. ./lib/parse.sh; yaml_get tests/fixtures/map.yaml does.not.exist'
   [ "$status" -eq "$missing_code" ]
 }
+
+@test "yaml_get handles keys with dots" {
+  run bash -lc '. ./lib/parse.sh; yaml_get tests/fixtures/map.yaml with\\.dot'
+  [ "$status" -eq 0 ]
+  [ "$output" = "dot-value" ]
+}
