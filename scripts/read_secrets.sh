@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 # scripts/read_secrets.sh - load secrets from .env securely
-set -euo pipefail
-IFS=$'\n\t'
-LC_ALL=C
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/common.sh
-. "${SCRIPT_DIR%/scripts}/lib/common.sh"
+. "${SCRIPT_DIR%/scripts}/lib/header.sh"
 
 usage() { echo "Usage: $0 [env-file]"; }
 

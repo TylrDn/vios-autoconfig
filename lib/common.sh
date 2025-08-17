@@ -2,8 +2,6 @@
 # lib/common.sh - shared safety, logging, and HMC helpers
 # Follows Google Shell Style Guide & OWASP shell safety guidance.
 
-set -euo pipefail
-IFS=$'\n\t'
 umask 077
 
 # ---- Globals (readonly)

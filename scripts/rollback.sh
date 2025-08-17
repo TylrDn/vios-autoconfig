@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 # scripts/rollback.sh - placeholder rollback handler
-set -euo pipefail
-IFS=$'\n\t'
-LC_ALL=C
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/common.sh
-. "${SCRIPT_DIR%/scripts}/lib/common.sh"
+. "${SCRIPT_DIR%/scripts}/lib/header.sh"
 
 usage() { echo "Usage: $0 <plan.jsonl>"; }
 

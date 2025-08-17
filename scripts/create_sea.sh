@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 # scripts/create_sea.sh - create Shared Ethernet Adapter on a VIOS
-set -euo pipefail
-IFS=$'\n\t'
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/common.sh
-. "${SCRIPT_DIR%/scripts}/lib/common.sh"
+. "${SCRIPT_DIR%/scripts}/lib/header.sh"
 
 usage() {
   cat <<EOF
