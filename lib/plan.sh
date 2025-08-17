@@ -19,7 +19,7 @@ plan_init() {
 plan_validate() {
   require_cmd jq
   local line="$1"
-  printf '%s' "$line" | jq -e 'type=="object" and (.action|type=="string" and length>0)' >/dev/null
+  printf '%s' "$line" | jq -e 'type == "object" and (.action | type == "string" and length > 0)' >/dev/null
 }
 
 plan_add() {
@@ -62,7 +62,7 @@ plan_apply() {
       pin-hostkey)
         local host
         host="$(printf '%s' "$line" | jq -r '.host')"
-        if [[ -z "$host" || "$host" == "null" ]]; then
+        if [[ -z "$host" ]]; then
           log ERROR "pin-hostkey missing host"
           status=1
           continue
@@ -70,8 +70,9 @@ plan_apply() {
         pin_hostkey "$host"
         ;;
       *)
-        log ERROR "unknown action in plan: $action"
-        return 1
+        log ERROR "Unknown action: $action"
+        status=1
+        continue
         ;;
     esac
   done <"${PLAN_PATH}"
