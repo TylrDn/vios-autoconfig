@@ -86,6 +86,8 @@ Use `make fmt-write` to apply formatting. CI executes `make lint test` on pushes
 - **Strict mode**: All scripts use `set -euo pipefail` and safe `IFS`.
 - **Dry-run vs Apply**: Set `DRY_RUN=1` (default) to preview; set `APPLY=1` to execute. Non-CI runs prompt for confirmation.
 - **HMC credentials**: Provide `HMC_HOST`, `HMC_USER`, `HMC_SSH_KEY` in `.env` (chmod 600). SSH key auth only.
+- **Input validation**: `HMC_HOST` and `HMC_USER` accept only alphanumeric, dot,
+  underscore, dash, and (for host) colon characters.
 - **Host key pinning**: First run captures and pins `${HMC_HOST}` key into `/var/tmp/vios-autoconfig/known_hosts` and enables `StrictHostKeyChecking=yes`.
 - **Logging**: Logs in `/var/tmp/vios-autoconfig/logs/` with basic redaction of sensitive tokens.
 - **CI**: GitHub Actions run ShellCheck, shfmt, Bats, Gitleaks, and actionlint on PRs/pushes.

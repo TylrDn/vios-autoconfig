@@ -56,6 +56,8 @@ load_env() {
   : "${HMC_HOST:?HMC_HOST is required}"
   : "${HMC_USER:?HMC_USER is required}"
   : "${HMC_SSH_KEY:?HMC_SSH_KEY is required}"
+  [[ "${HMC_HOST}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "Invalid HMC_HOST: ${HMC_HOST}"
+  [[ "${HMC_USER}" =~ ^[A-Za-z0-9._-]+$ ]] || die "Invalid HMC_USER: ${HMC_USER}"
   [[ -f "${HMC_SSH_KEY}" ]] || die "HMC_SSH_KEY not found: ${HMC_SSH_KEY}"
   if ! chmod 600 "${HMC_SSH_KEY}" 2>/dev/null; then
     log WARN "Failed to set permissions on HMC_SSH_KEY: ${HMC_SSH_KEY}"
